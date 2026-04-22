@@ -1,102 +1,147 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button, Table, message, Modal, Upload, Form, Input } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons'
 
 const { Dragger } = Upload
 
-// 模拟模板数据
-const mockTemplates = [
-  {
-    id: '1',
-    name: '默认模板',
-    source: 'builtin',
-    file_path: '/templates/default.pptx',
-    thumbnail: 'https://picsum.photos/200/150?random=1',
-    created_at: '2026-04-15 00:00:00'
-  },
-  {
-    id: '2',
-    name: '商务模板',
-    source: 'builtin',
-    file_path: '/templates/business.pptx',
-    thumbnail: 'https://picsum.photos/200/150?random=2',
-    created_at: '2026-04-15 00:00:00'
-  },
-  {
-    id: '3',
-    name: '创意模板',
-    source: 'user_upload',
-    file_path: '/uploads/templates/creative.pptx',
-    thumbnail: 'https://picsum.photos/200/150?random=3',
-    created_at: '2026-04-17 10:00:00'
-  }
-]
+interface Template {
+  id: string
+  name: string
+  source: string
+  file_path: string
+  thumbnail?: string
+  created_at: string
+  layouts?: string
+}
 
 const TemplateManager: React.FC = () => {
-  const [templates, setTemplates] = useState(mockTemplates)
+  const [templates, setTemplates] = useState<Template[]>([])
   const [visible, setVisible] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [form] = Form.useForm()
+  const [pptFile, setPptFile] = useState<File | null>(null)
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
 
+  // 获取模板列表
+  const fetchTemplates = async () => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/v1/templates/')
+      if (response.ok) {
+        const data = await response.json()
+        setTemplates(data.data)
+      } else {
+        message.error('获取模板列表失败')
+      }
+    } catch (error) {
+      console.error('错误:', error)
+      message.error('网络错误，请稍后重试')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
+
+  // 打开创建对话框（从创建按钮）
   const handleCreate = () => {
-    setEditingTemplate(null)
+    setPptFile(null)
+    setThumbnailFile(null)
     form.resetFields()
     setVisible(true)
   }
 
-  const handleEdit = (template: any) => {
-    setEditingTemplate(template)
-    form.setFieldsValue(template)
+  // 打开创建对话框（从拖拽或点击上传区域）
+  const handleOpenFromUpload = (file: File) => {
+    setPptFile(file)
+    // 从文件名获取模板名称（去除扩展名）
+    const fileName = file.name.replace(/\.[^/.]+$/, '')
+    form.setFieldsValue({ name: fileName })
+    setThumbnailFile(null)
     setVisible(true)
   }
 
+  // 处理上传区文件
+  const handleUploadFile = (file: any) => {
+    handleOpenFromUpload(file.file)
+    return false // 阻止默认上传行为
+  }
+
+  // 删除模板
   const handleDelete = (templateId: string) => {
     Modal.confirm({
       title: '确认删除',
       content: '确定要删除这个模板吗？',
-      onOk: () => {
-        setTemplates(templates.filter(t => t.id !== templateId))
-        message.success('模板删除成功')
+      onOk: async () => {
+        try {
+          const response = await fetch(`/api/v1/templates/${templateId}`, {
+            method: 'DELETE'
+          })
+          if (response.ok) {
+            message.success('模板删除成功')
+            fetchTemplates()
+          } else {
+            message.error('删除模板失败')
+          }
+        } catch (error) {
+          console.error('错误:', error)
+          message.error('网络错误，请稍后重试')
+        }
       }
     })
   }
 
-  const handleSubmit = (values: any) => {
-    if (editingTemplate) {
-      // 编辑模板
-      setTemplates(templates.map(t => t.id === editingTemplate.id ? { ...t, ...values } : t))
-      message.success('模板更新成功')
-    } else {
-      // 创建模板
-      const newTemplate = {
-        id: String(templates.length + 1),
-        ...values,
-        source: 'user_upload',
-        created_at: new Date().toISOString()
-      }
-      setTemplates([...templates, newTemplate])
-      message.success('模板创建成功')
-    }
+  // 取消操作
+  const handleCancel = () => {
     setVisible(false)
+    setPptFile(null)
+    setThumbnailFile(null)
+    form.resetFields()
   }
 
-  const handleUpload = (file: any) => {
-    // 模拟上传
-    setTimeout(() => {
-      const newTemplate = {
-        id: String(templates.length + 1),
-        name: file.name,
-        source: 'user_upload',
-        file_path: `/uploads/templates/${file.name}`,
-        thumbnail: 'https://picsum.photos/200/150?random=' + Math.floor(Math.random() * 100),
-        created_at: new Date().toISOString()
+  // 提交创建模板
+  const handleSubmit = async (values: any) => {
+    if (!pptFile) {
+      message.error('请上传.pptx模板文件')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const formData = new FormData()
+      formData.append('name', values.name)
+      formData.append('ppt_file', pptFile)
+      if (thumbnailFile) {
+        formData.append('thumbnail_file', thumbnailFile)
       }
-      setTemplates([...templates, newTemplate])
-      message.success('模板上传成功')
-    }, 1000)
-    return false
+
+      const response = await fetch('/api/v1/templates/upload-full', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (response.ok) {
+        message.success('模板创建成功')
+        fetchTemplates()
+        setVisible(false)
+        setPptFile(null)
+        setThumbnailFile(null)
+        form.resetFields()
+      } else {
+        message.error('创建模板失败')
+      }
+    } catch (error) {
+      console.error('错误:', error)
+      message.error('网络错误，请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
+  // 表格列定义
   const columns = [
     {
       title: '模板名称',
@@ -119,9 +164,31 @@ const TemplateManager: React.FC = () => {
       title: '缩略图',
       dataIndex: 'thumbnail',
       key: 'thumbnail',
-      render: (thumbnail: string) => (
-        <img src={thumbnail} alt="模板缩略图" style={{ width: 80, height: 60, objectFit: 'cover' }} />
-      )
+      render: (thumbnail: string, record: Template) => {
+        if (thumbnail) {
+          return <img src={thumbnail} alt="模板缩略图" style={{ width: 80, height: 60, objectFit: 'cover' }} />
+        }
+        // 无缩略图时显示模板名称占位图
+        return (
+          <div style={{ 
+            width: 80, 
+            height: 60, 
+            backgroundColor: '#e6f7ff', 
+            border: '1px solid #91d5ff',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            color: '#1890ff',
+            textAlign: 'center',
+            padding: 4,
+            overflow: 'hidden'
+          }}>
+            {record.name}
+          </div>
+        )
+      }
     },
     {
       title: '创建时间',
@@ -131,11 +198,8 @@ const TemplateManager: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: any) => (
+      render: (_: any, record: Template) => (
         <div>
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.source === 'builtin'}>
-            编辑
-          </Button>
           <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.source === 'builtin'}>
             删除
           </Button>
@@ -157,8 +221,9 @@ const TemplateManager: React.FC = () => {
         name="file"
         multiple={false}
         accept=".pptx"
-        customRequest={handleUpload}
+        customRequest={handleUploadFile}
         style={{ marginBottom: 24 }}
+        showUploadList={false}
       >
         <p className="ant-upload-drag-icon">
           <UploadOutlined />
@@ -169,21 +234,81 @@ const TemplateManager: React.FC = () => {
         </p>
       </Dragger>
       
-      <Table columns={columns} dataSource={templates} rowKey="id" />
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <span>加载中...</span>
+        </div>
+      ) : (
+        <Table columns={columns} dataSource={templates} rowKey="id" />
+      )}
       
       <Modal
-        title={editingTemplate ? '编辑模板' : '创建模板'}
+        title="创建模板"
         open={visible}
-        onCancel={() => setVisible(false)}
-        onOk={() => form.submit()}
+        onCancel={handleCancel}
+        footer={[
+          <Button key="cancel" onClick={handleCancel}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" loading={submitting} onClick={() => form.submit()}>
+            确定
+          </Button>
+        ]}
       >
-        <Form form={form} onFinish={handleSubmit}>
+        <Form form={form} onFinish={handleSubmit} labelCol={{ span: 6 }} wrapperCol={{ span: 16 }}>
           <Form.Item
             name="name"
             label="模板名称"
             rules={[{ required: true, message: '请输入模板名称' }]}
           >
             <Input placeholder="请输入模板名称" />
+          </Form.Item>
+          
+          <Form.Item
+            label="缩略图"
+            extra="可选，如果不上传将自动从PPT生成"
+          >
+            <Upload
+              name="thumbnail"
+              multiple={false}
+              accept="image/*"
+              showUploadList={true}
+              maxCount={1}
+              customRequest={({ file }) => {
+                setThumbnailFile(file)
+                return false
+              }}
+              beforeUpload={(file) => {
+                setThumbnailFile(file)
+                return false
+              }}
+            >
+              <Button icon={<UploadOutlined />}>选择缩略图</Button>
+            </Upload>
+          </Form.Item>
+          
+          <Form.Item
+            label="PPT模板"
+            rules={[{ required: true, message: '请上传.pptx模板文件' }]}
+          >
+            <Upload
+              name="ppt"
+              multiple={false}
+              accept=".pptx"
+              showUploadList={true}
+              maxCount={1}
+              customRequest={({ file }) => {
+                setPptFile(file)
+                return false
+              }}
+              beforeUpload={(file) => {
+                setPptFile(file)
+                return false
+              }}
+              fileList={pptFile ? [{ uid: '1', name: pptFile.name, status: 'done' }] : []}
+            >
+              {!pptFile && <Button icon={<UploadOutlined />}>选择PPT模板</Button>}
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>
