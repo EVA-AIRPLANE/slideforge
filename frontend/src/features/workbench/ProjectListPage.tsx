@@ -1,36 +1,205 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Button, Card, Table, message, Modal, Form, Input, Select, Space } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, RightOutlined, FileTextOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
+
+const { Option } = Select
+
+// 模拟项目数据
+const mockProjects = [
+  {
+    id: '1',
+    name: '产品发布会 PPT',
+    mode: 'designer',
+    status: 'draft',
+    template_id: null,
+    created_at: '2026-04-17 10:00:00',
+    updated_at: '2026-04-17 10:00:00'
+  },
+  {
+    id: '2',
+    name: '季度工作总结',
+    mode: 'collab',
+    status: 'ready',
+    template_id: null,
+    created_at: '2026-04-16 15:30:00',
+    updated_at: '2026-04-16 16:00:00'
+  }
+]
+
+// 模拟模板数据
+const mockTemplates = [
+  { id: '1', name: '默认模板' },
+  { id: '2', name: '商务模板' },
+  { id: '3', name: '创意模板' }
+]
 
 const ProjectListPage: React.FC = () => {
+  const [projects, setProjects] = useState(mockProjects)
+  const [visible, setVisible] = useState(false)
+  const [editingProject, setEditingProject] = useState<any>(null)
+  const [templates, setTemplates] = useState(mockTemplates)
+  const [form] = Form.useForm()
+  const navigate = useNavigate()
+
+  const handleCreate = () => {
+    setEditingProject(null)
+    form.resetFields()
+    setVisible(true)
+  }
+
+  const handleEdit = (project: any) => {
+    setEditingProject(project)
+    form.setFieldsValue(project)
+    setVisible(true)
+  }
+
+  const handleDelete = (projectId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这个项目吗？',
+      onOk: () => {
+        setProjects(projects.filter(p => p.id !== projectId))
+        message.success('项目删除成功')
+      }
+    })
+  }
+
+  const handleSubmit = (values: any) => {
+    if (editingProject) {
+      // 编辑项目
+      setProjects(projects.map(p => p.id === editingProject.id ? { ...p, ...values } : p))
+      message.success('项目更新成功')
+    } else {
+      // 创建项目
+      const newProject = {
+        id: String(projects.length + 1),
+        ...values,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      setProjects([...projects, newProject])
+      message.success('项目创建成功')
+    }
+    setVisible(false)
+  }
+
+  const handleEnterCanvas = (projectId: string) => {
+    navigate(`/project/${projectId}/canvas`)
+  }
+
+  const columns = [
+    {
+      title: '项目名称',
+      dataIndex: 'name',
+      key: 'name'
+    },
+    {
+      title: '模式',
+      dataIndex: 'mode',
+      key: 'mode',
+      render: (mode: string) => {
+        const modeMap = {
+          designer: '设计师模式',
+          collab: '协作模式',
+          auto: '自动模式'
+        }
+        return modeMap[mode] || mode
+      }
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => {
+        const statusMap = {
+          draft: '草稿',
+          generating: '生成中',
+          ready: '已完成'
+        }
+        return statusMap[status] || status
+      }
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at'
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: any, record: any) => (
+        <div>
+          <Button type="link" icon={<RightOutlined />} onClick={() => handleEnterCanvas(record.id)}>
+            进入画布
+          </Button>
+          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
+          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+            删除
+          </Button>
+        </div>
+      )
+    }
+  ]
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">项目列表</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* 项目卡片将在这里渲染 */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-semibold mb-2">示例项目</h3>
-          <p className="text-gray-600 mb-4">这是一个示例项目</p>
-          <div className="flex space-x-2">
-            <Link
-              to="/project/1/canvas"
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm"
-            >
-              编辑
-            </Link>
-            <Link
-              to="/project/1/preview"
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm"
-            >
-              预览
-            </Link>
-          </div>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1>项目工作台</h1>
+        <Space>
+          <Button icon={<FileTextOutlined />} onClick={() => navigate('/templates')}>
+            模板管理
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            创建项目
+          </Button>
+        </Space>
       </div>
-      <div className="mt-8">
-        <button className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md">
-          创建新项目
-        </button>
-      </div>
+      <Table columns={columns} dataSource={projects} rowKey="id" />
+      <Modal
+        title={editingProject ? '编辑项目' : '创建项目'}
+        open={visible}
+        onCancel={() => setVisible(false)}
+        onOk={() => form.submit()}
+      >
+        <Form form={form} onFinish={handleSubmit}>
+          <Form.Item
+            name="name"
+            label="项目名称"
+            rules={[{ required: true, message: '请输入项目名称' }]}
+          >
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
+          <Form.Item
+            name="template_id"
+            label="选择模板"
+            rules={[{ required: true, message: '请选择模板' }]}
+            initialValue={templates.length > 0 ? templates[0].id : null}
+          >
+            <Select placeholder="请选择模板">
+              {templates.map(template => (
+                <Option key={template.id} value={template.id}>
+                  {template.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="mode"
+            label="模式"
+            rules={[{ required: true, message: '请选择模式' }]}
+          >
+            <Select placeholder="请选择模式">
+              <Option value="designer">设计师模式</Option>
+              <Option value="collab">协作模式</Option>
+              <Option value="auto">自动模式</Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }
