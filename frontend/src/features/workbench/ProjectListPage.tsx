@@ -1,46 +1,53 @@
 import React, { useState, useEffect } from 'react'
-import { Button, Card, Table, message, Modal, Form, Input, Select, Space } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, RightOutlined, FileTextOutlined } from '@ant-design/icons'
+import { Button, Card, Table, message, Modal, Form, Input, Select, Space, Spin } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, RightOutlined, ReadOutlined, LoadingOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import { projectApi } from '../../core/api/projects'
+import { templateApi } from '../../core/api/templates'
 
 const { Option } = Select
 
-// 模拟项目数据
-const mockProjects = [
-  {
-    id: '1',
-    name: '产品发布会 PPT',
-    mode: 'designer',
-    status: 'draft',
-    template_id: null,
-    created_at: '2026-04-17 10:00:00',
-    updated_at: '2026-04-17 10:00:00'
-  },
-  {
-    id: '2',
-    name: '季度工作总结',
-    mode: 'collab',
-    status: 'ready',
-    template_id: null,
-    created_at: '2026-04-16 15:30:00',
-    updated_at: '2026-04-16 16:00:00'
-  }
-]
-
-// 模拟模板数据
-const mockTemplates = [
-  { id: '1', name: '默认模板' },
-  { id: '2', name: '商务模板' },
-  { id: '3', name: '创意模板' }
-]
-
 const ProjectListPage: React.FC = () => {
-  const [projects, setProjects] = useState(mockProjects)
+  const [projects, setProjects] = useState<any[]>([])
   const [visible, setVisible] = useState(false)
   const [editingProject, setEditingProject] = useState<any>(null)
-  const [templates, setTemplates] = useState(mockTemplates)
+  const [templates, setTemplates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [form] = Form.useForm()
   const navigate = useNavigate()
+
+  // 加载项目列表
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoading(true)
+        const data = await projectApi.getProjects()
+        setProjects(data)
+      } catch (error) {
+        console.error('加载项目列表失败:', error)
+        message.error('加载项目列表失败')
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadProjects()
+  }, [])
+
+  // 加载模板列表
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const data = await templateApi.getTemplates()
+        setTemplates(data)
+      } catch (error) {
+        console.error('加载模板列表失败:', error)
+      }
+    }
+    
+    loadTemplates()
+  }, [])
 
   const handleCreate = () => {
     setEditingProject(null)
@@ -58,35 +65,49 @@ const ProjectListPage: React.FC = () => {
     Modal.confirm({
       title: '确认删除',
       content: '确定要删除这个项目吗？',
-      onOk: () => {
-        setProjects(projects.filter(p => p.id !== projectId))
-        message.success('项目删除成功')
+      onOk: async () => {
+        try {
+          await projectApi.deleteProject(projectId)
+          setProjects(projects.filter(p => p.id !== projectId))
+          message.success('项目删除成功')
+        } catch (error) {
+          console.error('删除项目失败:', error)
+          message.error('删除项目失败')
+        }
       }
     })
   }
 
-  const handleSubmit = (values: any) => {
-    if (editingProject) {
-      // 编辑项目
-      setProjects(projects.map(p => p.id === editingProject.id ? { ...p, ...values } : p))
-      message.success('项目更新成功')
-    } else {
-      // 创建项目
-      const newProject = {
-        id: String(projects.length + 1),
-        ...values,
-        status: 'draft',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+  const handleSubmit = async (values: any) => {
+    try {
+      setSubmitting(true)
+      
+      if (editingProject) {
+        // 编辑项目
+        const updatedProject = await projectApi.updateProject(editingProject.id, values)
+        setProjects(projects.map(p => p.id === editingProject.id ? updatedProject : p))
+        message.success('项目更新成功')
+      } else {
+        // 创建项目
+        const newProject = await projectApi.createProject(values)
+        setProjects([...projects, newProject])
+        message.success('项目创建成功')
       }
-      setProjects([...projects, newProject])
-      message.success('项目创建成功')
+      setVisible(false)
+    } catch (error) {
+      console.error('保存项目失败:', error)
+      message.error('保存项目失败')
+    } finally {
+      setSubmitting(false)
     }
-    setVisible(false)
   }
 
   const handleEnterCanvas = (projectId: string) => {
-    navigate(`/project/${projectId}/canvas`)
+    navigate(`/projects/${projectId}`)
+  }
+
+  const handleEnterPreview = (projectId: string) => {
+    navigate(`/projects/${projectId}/preview`)
   }
 
   const columns = [
@@ -134,6 +155,9 @@ const ProjectListPage: React.FC = () => {
           <Button type="link" icon={<RightOutlined />} onClick={() => handleEnterCanvas(record.id)}>
             进入画布
           </Button>
+          <Button type="link" icon={<ReadOutlined />} onClick={() => handleEnterPreview(record.id)}>
+            预览
+          </Button>
           <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
@@ -150,7 +174,7 @@ const ProjectListPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1>项目工作台</h1>
         <Space>
-          <Button icon={<FileTextOutlined />} onClick={() => navigate('/templates')}>
+          <Button icon={<ReadOutlined />} onClick={() => navigate('/templates')}>
             模板管理
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
@@ -158,12 +182,19 @@ const ProjectListPage: React.FC = () => {
           </Button>
         </Space>
       </div>
-      <Table columns={columns} dataSource={projects} rowKey="id" />
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+          <Spin size="large" tip="加载项目列表..." />
+        </div>
+      ) : (
+        <Table columns={columns} dataSource={projects} rowKey="id" />
+      )}
       <Modal
         title={editingProject ? '编辑项目' : '创建项目'}
         open={visible}
         onCancel={() => setVisible(false)}
         onOk={() => form.submit()}
+        confirmLoading={submitting}
       >
         <Form form={form} onFinish={handleSubmit}>
           <Form.Item

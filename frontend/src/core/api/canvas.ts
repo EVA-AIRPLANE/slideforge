@@ -24,6 +24,23 @@ interface NodeData {
   updated_at: string
 }
 
+interface SlideImage {
+  id: string
+  url: string
+  thumbnail?: string
+  caption?: string
+}
+
+interface Slide {
+  id: string
+  type: string  // title / chapter / content
+  title: string
+  content?: string
+  speaker_notes?: string
+  images: SlideImage[]
+  level: number
+}
+
 export const canvasApi = {
   getNodes: async (projectId: string): Promise<NodeData[]> => {
     const response = await apiClient.get(`/canvas/projects/${projectId}/nodes`)
@@ -42,5 +59,10 @@ export const canvasApi = {
   
   deleteNode: async (projectId: string, nodeId: string): Promise<void> => {
     await apiClient.delete(`/canvas/projects/${projectId}/nodes/${nodeId}`)
+  },
+
+  getPreview: async (projectId: string): Promise<Slide[]> => {
+    const response = await apiClient.get(`/canvas/projects/${projectId}/preview`)
+    return response.data.data
   }
 }

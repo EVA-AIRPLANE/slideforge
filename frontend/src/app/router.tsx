@@ -27,25 +27,13 @@ const router = createBrowserRouter([
       {
         path: '',
         element: <ProjectListPage />
-      }
-    ]
-  },
-  {
-    path: '/project/:id/canvas',
-    element: <App />,
-    children: [
+      },
       {
-        path: '',
+        path: ':projectId',
         element: <CanvasPage />
-      }
-    ]
-  },
-  {
-    path: '/project/:id/preview',
-    element: <App />,
-    children: [
+      },
       {
-        path: '',
+        path: ':projectId/preview',
         element: <PreviewPage />
       }
     ]

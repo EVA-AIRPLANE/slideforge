@@ -11,7 +11,11 @@ router = APIRouter()
 @router.post("/", response_model=Response[ProjectResponse])
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     """创建项目"""
-    db_project = Project(**project.model_dump())
+    # TODO: 实现真正的用户认证后，从 token 中获取 user_id
+    # 暂时使用默认用户 ID
+    project_data = project.model_dump()
+    project_data['user_id'] = 'default_user'
+    db_project = Project(**project_data)
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
